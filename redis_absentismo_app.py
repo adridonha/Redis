@@ -64,9 +64,98 @@ print(baseDatosRedis.keys("alumno:[1245]"))
 print("\n10. Buscar con ? (alumno:?2) -> por ejemplo alumno:12 o alumno:22")
 print(baseDatosRedis.keys("alumno:?2"))
 
-# 11. Filtrar por un valor
-print("\n11. Filtrar alumnos del curso 5A")
-for k in r.keys("alumno:*"):
-    obj = json.loads(r.get(k))
-    if obj["curso"] == "5A":
-        print(k, obj)
+# 11. Filtrar alumnos
+print("\n11. Filtrar alumnos con 3 o más faltas (riesgo de absentismo)")
+for k in baseDatosRedis.keys("alumno:*"):
+    alumno = json.loads(baseDatosRedis.get(k))
+    if alumno["faltas"] >= 3:
+        print(k, alumno)
+
+# 12. Actualizar varios registros
+print("\n12. Aumentar faltas +1 a alumnos del curso 6B")
+for k in baseDatosRedis.keys("alumno:*"):
+    alumno = json.loads(baseDatosRedis.get(k))
+    if alumno["curso"] == "6B":
+        alumno["faltas"] += 1
+        baseDatosRedis.set(k, json.dumps(alumno))
+        print(k, alumno)
+
+
+# 13. Eliminar varios registros según filtros
+print("\n13. Eliminar alumnos sin faltas")
+for k in baseDatosRedis.keys("alumno:*"):
+    alumno = json.loads(baseDatosRedis.get(k))
+    if alumno["faltas"] == 0:
+        baseDatosRedis.delete(k)
+        print("Eliminado:", k)
+
+
+# 14. Crear una estructura JSON en forma de array
+print("\n14. Crear array JSON de alumnos")
+lista_alumnos = []
+for k in baseDatosRedis.keys("alumno:*"):
+    lista_alumnos.append(json.loads(baseDatosRedis.get(k)))
+
+baseDatosRedis.set("alumnos_array", json.dumps(lista_alumnos))
+print("Array guardado en Redis")
+
+
+# 15. Filtrar por cada atributo del JSON
+print("\n15. Filtrar alumnos por edad = 11")
+alumnos = json.loads(baseDatosRedis.get("alumnos_array"))
+for a in alumnos:
+    if a["edad"] == 11:
+        print(a)
+
+
+# 16. Crear una lista en REDIS
+print("\n16. Crear lista Redis de alumnos en riesgo")
+baseDatosRedis.delete("lista_riesgo")
+
+for k in baseDatosRedis.keys("alumno:*"):
+    alumno = json.loads(baseDatosRedis.get(k))
+    if alumno["faltas"] >= 3:
+        baseDatosRedis.rpush("lista_riesgo", alumno["nombre"])
+
+print("Lista creada:", baseDatosRedis.lrange("lista_riesgo", 0, -1))
+
+
+# 17. Obtener elementos de una lista con filtro
+print("\n17. Filtrar lista por nombre que contenga '5'")
+for nombre in baseDatosRedis.lrange("lista_riesgo", 0, -1):
+    if "5" in nombre:
+        print(nombre)
+
+
+# 18. Crear datos con índices
+print("\n18. Crear alumnos con índices (hash)")
+baseDatosRedis.hset("alumno_indexado:1", mapping={
+    "nombre": "AlumnoIndex1",
+    "curso": "5A",
+    "faltas": 4
+})
+
+baseDatosRedis.hset("alumno_indexado:2", mapping={
+    "nombre": "AlumnoIndex2",
+    "curso": "6B",
+    "faltas": 2
+})
+
+
+# 19. Búsqueda usando índices
+print("\n19. Buscar alumnos indexados del curso 5A")
+for key in baseDatosRedis.keys("alumno_indexado:*"):
+    if baseDatosRedis.hget(key, "curso") == "5A":
+        print(key, baseDatosRedis.hgetall(key))
+
+
+# 20. Group By usando índices
+print("\n20. Group By curso")
+group = {}
+
+for key in baseDatosRedis.keys("alumno_indexado:*"):
+    curso = baseDatosRedis.hget(key, "curso")
+    group.setdefault(curso, []).append(baseDatosRedis.hget(key, "nombre"))
+
+for curso, alumnos in group.items():
+    print(curso, "->", alumnos)
